@@ -1,0 +1,68 @@
+---
+title: "child2"
+format: docx
+editor: visual
+---
+
+# Executive summary
+
+```{r, echo=FALSE}
+
+## Included for standalone executability
+#source(here::here("inst","analyze_design_matrix.r"))
+```
+
+The suggested sample size of this 2-arm RCT investigating a composite event via survival analysis where the incidence of the events are hypothesized to be 5% and 30% in the treatment and control arms, respectively, is 46 patients per arm, or a **total** of **92 patients** for the study with an **interim** analysis at 65% of the planned enrollment or after a total of **60 patients** have been followed up successfully for 12 months. This higher-than-usual rate is recommended due to the minimum number of subjects required for a meaningful survival analysis at the interim coupled with the need for a reliable reestimation of the sample size at the interim.
+
+ - For an interim analysis at 65% planned enrollment, the critical p-value should be **`r rpact::getDesignGroupSequential(kMax = 2, informationRates = c(.65,1), typeOfDesign = "asHSD", gammaA = -0.5)[["stageLevels"]] %>% {.*2} %>% {.[1]} %>% round(.,digits = 5)`** and the final analysis should be conducted at **`r rpact::getDesignGroupSequential(kMax = 2, informationRates = c(.65,1), typeOfDesign = "asHSD", gammaA = -0.5)[["stageLevels"]] %>% {.*2} %>% {.[2]} %>% round(.,digits = 5)`**. 
+ 
+ - While the results do align well with the previous suggestion regarding the sample size, the new results show that we can conduct an interim analysis with adjusted (more stringent) significance levels while using data from censored ("dropped out") patients. These two effects seem to  cancel each other out leaving the sample size largely unaffected.
+ 
+ - Based on the speed of enrollment, you may consider expanding the follow-up period. This does not necessarily mean that you have to follow up the last patient for an extended period of time, but if resources permit, it would seem to be wasteful to censor otherwise available patient data after a year.
+
+```{r}
+fig_1
+```
+
+# Detailed results
+
+## Parameters used
+
+ - Power: at least 80%
+ - Cox proportional hazards model
+ - HR: 1 (no difference in the *shape* of the survival curve between arms)
+ - Proportion of events in the control arm: 30%
+ - Proportion of events in the treatment arm: 5%
+ - Proportion of patients censored before 360 days ("Dropout rate"): 25%
+ - Global significance level: 5%
+ - Hwang Shih DeCani (HSD) alpha spending framework with $\gamma = -0.5$
+
+## Explanation of the interim analysis
+
+The Hwang Shih DeCani (HSD) alpha spending framework was used to describe the adaptive element in the trial. Under this framework, only a $\gamma$ parameter is fixed (taken to be -0.5), and the Investigator is free to choose when to conduct a (single) interim analysis. 
+
+An interim analysis after ~65% of the planned sample size is suggested. This would allow to have ~30 subjects / arm for the interim analysis, which is considered to be by some as the minimum number of subjects for a meaningful survival analysis. While this is debatable and lower numbers could be justified, it is a good rule of thumb to follow.
+
+Sample size may be re-estimated after the data from the interim analysis become available. 
+
+Enrollment and continuous follow-up may be ongoing during the interim analysis. If the trial is to be stopped at the interim stage for success, the data collected during the interim may be presented separately.
+
+## Robustness of results
+
+The results are robust against deviations for the hypothesized ratio of early censored patients ("dropouts"); this is explained by the fact that in case of survival analysis, a patient lost to follow up at eg. 6 months without an event still contributes to the survival curve up to that point.
+
+In contrast, the event rates impact the power of the study dramatically. The impact is mitigated by the adaptive element in the design; the re estimation of the sample size at the interim analysis therefore is highly recommended. Putting the interim analysis relatively late (ie. 65% of *a priori* planned sample size) is recommended in this case so that at the interim a relatively robust re estimation of the sample size would be possible.
+
+The timing of the interim analysis (aka. the information ratio - IR) does not seem to have a minimal impact on the power of the study.
+
+```{r}
+fig_2
+```
+
+```{r}
+fig_3
+```
+
+```{r}
+fig_4
+```
