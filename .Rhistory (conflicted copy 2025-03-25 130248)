@@ -1,0 +1,512 @@
+censor = .25, # This is the dropout rate
+num.data.frames= nsim,
+X = gen_arms(n)
+, beta = 0 # No difference in the *shape* of the surv. curve
+#, fixed.hazard = TRUE # DONT! It would condition the results to that function
+)
+i <- 1
+data <- simdata[[i]]$data
+data$ther <- as.factor(data$ther)
+# dividing into two dfs for the two arms
+data0 <- data[data$ther == 0,]
+data1 <- data[data$ther == 1,]
+# To simulate the scenario where no events occurred up until end of study,
+# we set the event indicator to FALSE for the first X%;Y% of the observations
+# in the two arms, respectively.
+data0$failed[1:ceiling(n*(1-event_control))] <- FALSE
+data0$y[1:ceiling(n*(1-event_control))]      <- 365
+data1$failed[1:ceiling(n*(1-event_trt))] <- FALSE
+data1$y[1:ceiling(n*(1-event_trt))]      <- 365
+# reshuffling
+data0 <- data0[sample(nrow(data0)),]
+data1 <- data1[sample(nrow(data1)),]
+# getting the interim data based on ir
+data_interim <- rbind(data0[1:ceiling(n*ir),], data1[1:ceiling(n*ir),])
+# and the additional data
+data_additional <- rbind(data0[(ceiling(n*ir)+1):nrow(data0),],
+data1[(ceiling(n*ir)+1):nrow(data1),])
+data_full <- rbind(data_interim, data_additional)
+# Doing the interim analysis
+s <- with(data_interim, Surv( y, failed))
+s
+mod1 <- survfit(s ~ ther, data_interim)
+summary(mod1)
+autoplot(mod1)
+# going the cox way
+mod2 <- coxph(s~ther,
+data_interim, ties="breslow") # for comparability
+#summary(mod2)
+summary(mod2)
+summary(mod2)$logtest[3]
+#### ISSUE *** ISSUE *** ISSUE *** ISSUE *** ISSUE ***
+# MY HWANG SHIH DECANI FUNCTION IS **BROKEN!!!**
+succ_interim <- ifelse(pval_interim < hwang_shih_decani(ir,.05,lambda),
+TRUE, FALSE)
+pval_interim <- summary(mod2)$logtest[3]
+#### ISSUE *** ISSUE *** ISSUE *** ISSUE *** ISSUE ***
+# MY HWANG SHIH DECANI FUNCTION IS **BROKEN!!!**
+succ_interim <- ifelse(pval_interim < hwang_shih_decani(ir,.05,lambda),
+TRUE, FALSE)
+s <- with(data_full, Surv( y, failed))
+mod2 <- coxph(s~ther, data_full, ties="breslow") # for comparability
+#summary(mod2)
+pval_final <- summary(mod2)$logtest[3]
+succ_final <- ifelse(pval_final < hwang_shih_decani(1,.05,lambda),
+TRUE, FALSE)
+succ_final
+# Simulates the proported study whch includes a pre-planned interim analysis
+# and contains two arms with 5% and 30% probabilities for an event to occur
+# along with a 25% dropout rate (censoring)
+library(coxed)
+library(survival)
+library(ggfortify)
+source(here::here("inst","functions","load_stuff.r"))
+gen_arms <- function(n) {
+return(
+data.frame( ther =
+c(
+rep(0.0 , n),
+rep(1   , n)
+)))
+}
+# from D.Rizopoulos' slide; sampsize estimation
+no_events <- function (beta, p = 0.5, power, alpha = 0.05) {
+# ’beta’ the log hazard ratio
+# ’p’ the proportion of subjects in the treatment group
+# ’power’ the desired level of power
+# ’alpha’ the Type I error
+q <- 1 - p
+z.power <- qnorm(power)
+ca <- abs(qnorm(alpha / 2))
+round((ca + z.power)^2 / (p * q * beta^2))
+}
+set.seed(1234)
+n       <- 100
+nsim    <- 3
+ir      <- 0.5
+lambda  <- -1
+event_control <- 0.3
+event_trt     <- 0.05
+# Make the max time of pot. events longer so we can right censor 28+days;
+# was determined via mean prop. of censored values
+simdata <- sim.survdata(N=n, T=365,
+censor = .25, # This is the dropout rate
+num.data.frames= nsim,
+X = gen_arms(n)
+, beta = 0 # No difference in the *shape* of the surv. curve
+#, fixed.hazard = TRUE # DONT! It would condition the results to that function
+)
+i <- 1
+data <- simdata[[i]]$data
+data$ther <- as.factor(data$ther)
+# dividing into two dfs for the two arms
+data0 <- data[data$ther == 0,]
+data1 <- data[data$ther == 1,]
+# To simulate the scenario where no events occurred up until end of study,
+# we set the event indicator to FALSE for the first X%;Y% of the observations
+# in the two arms, respectively.
+data0$failed[1:ceiling(n*(1-event_control))] <- FALSE
+data0$y[1:ceiling(n*(1-event_control))]      <- 365
+data1$failed[1:ceiling(n*(1-event_trt))] <- FALSE
+data1$y[1:ceiling(n*(1-event_trt))]      <- 365
+# reshuffling
+data0 <- data0[sample(nrow(data0)),]
+data1 <- data1[sample(nrow(data1)),]
+# getting the interim data based on ir
+data_interim <- rbind(data0[1:ceiling(n*ir),], data1[1:ceiling(n*ir),])
+# and the additional data
+data_additional <- rbind(data0[(ceiling(n*ir)+1):nrow(data0),],
+data1[(ceiling(n*ir)+1):nrow(data1),])
+data_full <- rbind(data_interim, data_additional)
+# Doing the interim analysis
+s <- with(data_interim, Surv( y, failed))
+# # going the log-rank way
+# mod1 <- survfit(s ~ ther, data_interim)
+# summary(mod1)
+# autoplot(mod1)
+# going the cox way
+mod2 <- coxph(s~ther,
+data_interim, ties="breslow") # for comparability
+#summary(mod2)
+pval_interim <- summary(mod2)$logtest[3]
+#### ISSUE *** ISSUE *** ISSUE *** ISSUE *** ISSUE ***
+# MY HWANG SHIH DECANI FUNCTION IS **BROKEN!!!**
+succ_interim <- ifelse(pval_interim < hwang_shih_decani(ir,.05,lambda),
+TRUE, FALSE)
+# if interim is not successful, go to the final
+if (succ_interim == FALSE) {
+s <- with(data_full, Surv( y, failed))
+mod2 <- coxph(s~ther, data_full, ties="breslow") # for comparability
+#summary(mod2)
+pval_final <- summary(mod2)$logtest[3]
+succ_final <- ifelse(pval_final < hwang_shih_decani(1,.05,lambda),
+TRUE, FALSE)
+} else {
+succ_final <- TRUE
+}
+# Bunch
+survminer::ggforest(mod2,data)
+# We create a new data frame for each group
+new_data <- data.frame(ther = levels(data$ther))  # i.e., "0" and "1"
+# Create survival curves *based on the Cox model* (mod2)
+cox_surv <- survfit(mod2, newdata = new_data)
+# Plot
+survminer::ggsurvplot(
+cox_surv,
+data = data,
+legend.title = "Treatment",
+legend.labs = c("Control (0)", "Treatment (1)"),
+xlab = "Time",
+ylab = "Survival Probability",
+conf.int = TRUE,       # show confidence intervals
+risk.table = TRUE      # show number at risk table
+)
+# Simulates the proported study whch includes a pre-planned interim analysis
+# and contains two arms with 5% and 30% probabilities for an event to occur
+# along with a 25% dropout rate (censoring)
+library(coxed)
+library(survival)
+library(ggfortify)
+source(here::here("inst","functions","load_stuff.r"))
+gen_arms <- function(n) {
+return(
+data.frame( ther =
+c(
+rep(0.0 , n),
+rep(1   , n)
+)))
+}
+# from D.Rizopoulos' slide; sampsize estimation
+no_events <- function (beta, p = 0.5, power, alpha = 0.05) {
+# ’beta’ the log hazard ratio
+# ’p’ the proportion of subjects in the treatment group
+# ’power’ the desired level of power
+# ’alpha’ the Type I error
+q <- 1 - p
+z.power <- qnorm(power)
+ca <- abs(qnorm(alpha / 2))
+round((ca + z.power)^2 / (p * q * beta^2))
+}
+set.seed(1234)
+n       <- 100
+nsim    <- 3
+ir      <- 0.5
+lambda  <- -1
+event_control <- 0.3
+event_trt     <- 0.05
+# Make the max time of pot. events longer so we can right censor 28+days;
+# was determined via mean prop. of censored values
+simdata <- sim.survdata(N=n, T=365,
+censor = .25, # This is the dropout rate
+num.data.frames= nsim,
+X = gen_arms(n)
+, beta = 0 # No difference in the *shape* of the surv. curve
+#, fixed.hazard = TRUE # DONT! It would condition the results to that function
+)
+i <- 2
+data <- simdata[[i]]$data
+data$ther <- as.factor(data$ther)
+# dividing into two dfs for the two arms
+data0 <- data[data$ther == 0,]
+data1 <- data[data$ther == 1,]
+# To simulate the scenario where no events occurred up until end of study,
+# we set the event indicator to FALSE for the first X%;Y% of the observations
+# in the two arms, respectively.
+data0$failed[1:ceiling(n*(1-event_control))] <- FALSE
+data0$y[1:ceiling(n*(1-event_control))]      <- 365
+data1$failed[1:ceiling(n*(1-event_trt))] <- FALSE
+data1$y[1:ceiling(n*(1-event_trt))]      <- 365
+# reshuffling
+data0 <- data0[sample(nrow(data0)),]
+data1 <- data1[sample(nrow(data1)),]
+# getting the interim data based on ir
+data_interim <- rbind(data0[1:ceiling(n*ir),], data1[1:ceiling(n*ir),])
+# and the additional data
+data_additional <- rbind(data0[(ceiling(n*ir)+1):nrow(data0),],
+data1[(ceiling(n*ir)+1):nrow(data1),])
+data_full <- rbind(data_interim, data_additional)
+# Doing the interim analysis
+s <- with(data_interim, Surv( y, failed))
+# # going the log-rank way
+# mod1 <- survfit(s ~ ther, data_interim)
+# summary(mod1)
+# autoplot(mod1)
+# going the cox way
+mod2 <- coxph(s~ther,
+data_interim, ties="breslow") # for comparability
+#summary(mod2)
+pval_interim <- summary(mod2)$logtest[3]
+#### ISSUE *** ISSUE *** ISSUE *** ISSUE *** ISSUE ***
+# MY HWANG SHIH DECANI FUNCTION IS **BROKEN!!!**
+succ_interim <- ifelse(pval_interim < hwang_shih_decani(ir,.05,lambda),
+TRUE, FALSE)
+# if interim is not successful, go to the final
+if (succ_interim == FALSE) {
+s <- with(data_full, Surv( y, failed))
+mod2 <- coxph(s~ther, data_full, ties="breslow") # for comparability
+#summary(mod2)
+pval_final <- summary(mod2)$logtest[3]
+succ_final <- ifelse(pval_final < hwang_shih_decani(1,.05,lambda),
+TRUE, FALSE)
+} else {
+succ_final <- TRUE
+}
+# Bunch of visualizations
+survminer::ggforest(mod2,data)
+# We create a new data frame for each group
+new_data <- data.frame(ther = levels(data$ther))  # i.e., "0" and "1"
+# Create survival curves *based on the Cox model* (mod2)
+cox_surv <- survfit(mod2, newdata = new_data)
+# Plot
+survminer::ggsurvplot(
+cox_surv,
+data = data,
+legend.title = "Treatment",
+legend.labs = c("Control (0)", "Treatment (1)"),
+xlab = "Time",
+ylab = "Survival Probability",
+conf.int = TRUE,       # show confidence intervals
+risk.table = TRUE      # show number at risk table
+)
+# Simulates the proported study whch includes a pre-planned interim analysis
+# and contains two arms with 5% and 30% probabilities for an event to occur
+# along with a 25% dropout rate (censoring)
+# Introduces a des_mat design matrix which describes the different variables
+# influencing the outcome
+library(coxed)
+library(survival)
+library(ggfortify)
+source(here::here("inst","functions","load_stuff.r"))
+gen_arms <- function(n) {
+return(
+data.frame( ther =
+c(
+rep(0.0 , n),
+rep(1   , n)
+)))
+}
+des_mat <- expand.grid(
+n = c(20, 30, 40, 50, 60),
+nsim = c(100),
+ir = c(0.5),
+gamma = c(-1, 0, 1),
+event_control = c(0.3),
+event_trt = c(0.05)
+) %>%
+mutate( succ_interim = 0,
+succ_final = 0
+)
+View(des_mat)
+pb <- txtProgressBar()
+for (i in 1:nrow(des_mat)) {
+# Get the pval tresholds for interim/final analysis
+design <- rpact::getDesignGroupSequential(kMax = 2,
+typeOfDesign = "asHSD",
+gammaA = des_mat$gamma[i])
+pvals  <- design[["stageLevels"]] * 2
+# Make the max time of pot. events longer so we can right censor 28+days;
+# was determined via mean prop. of censored values
+simdata <- sim.survdata(N=des_mat$n[i], T=365,
+censor = .25, # This is the dropout rate
+num.data.frames= des_mat$nsim[i],
+X = gen_arms(des_mat$n[i])
+, beta = 0 # No difference in the *shape* of the surv. curve
+#, fixed.hazard = TRUE # DONT! It would condition the results to that function
+)
+for (j in 1:des_mat$nsim[i]) {
+data <- simdata[[j]]$data
+data$ther <- as.factor(data$ther)
+# dividing into two dfs for the two arms
+data0 <- data[data$ther == 0,]
+data1 <- data[data$ther == 1,]
+# To simulate the scenario where no events occurred up until end of study,
+# we set the event indicator to FALSE for the first X%;Y% of the observations
+# in the two arms, respectively.
+no_events_control <- rbinom(1, des_mat$n[i], 1 - des_mat$event_control[i])
+data0$failed[1:no_events_control] <- FALSE
+data0$y[1:no_events_control]      <- 365
+no_events_trt <- rbinom(1, des_mat$n[i], 1 - des_mat$event_trt[i])
+data1$failed[1:no_events_trt] <- FALSE
+data1$y[1:no_events_trt]      <- 365
+# reshuffling
+data0 <- data0[sample(nrow(data0)),]
+data1 <- data1[sample(nrow(data1)),]
+# getting the interim data based on ir
+data_interim <- rbind(data0[1:ceiling(des_mat$n[i]*des_mat$ir[i]),],
+data1[1:ceiling(des_mat$n[i]*des_mat$ir[i]),])
+# and the additional data
+data_additional <- rbind(data0[(ceiling(des_mat$n[i]*des_mat$ir[i])+1):nrow(data0),],
+data1[(ceiling(des_mat$n[i]*des_mat$ir[i])+1):nrow(data1),])
+data_full <- rbind(data_interim, data_additional)
+# Doing the interim analysis
+s <- with(data_interim, Surv( y, failed))
+# # going the log-rank way
+# mod1 <- survfit(s ~ ther, data_interim)
+# summary(mod1)
+# autoplot(mod1)
+# going the cox way
+mod2 <- coxph(s~ther,
+data_interim, ties="breslow") # for comparability
+#summary(mod2)
+pval_interim <- summary(mod2)$logtest[3]
+# Success at interim?
+succ_interim <- ifelse(pval_interim < pvals[1], TRUE, FALSE)
+des_mat$succ_interim[i] <- des_mat$succ_interim[i] + succ_interim
+# if interim is not successful, go to the final
+if (succ_interim == FALSE) {
+s <- with(data_full, Surv( y, failed))
+mod2 <- coxph(s~ther, data_full, ties="breslow") # for comparability
+#summary(mod2)
+pval_final <- summary(mod2)$logtest[3]
+succ_final <- ifelse(pval_final <  pvals[2],
+TRUE, FALSE)
+} else {
+succ_final <- TRUE
+}
+des_mat$succ_final[i] <- des_mat$succ_final[i] + succ_final
+}
+setTxtProgressBar(pb, i/nrow(des_mat))
+}
+close(pb)
+gen_arms(des_mat$n[i])
+des_mat$n[i]
+View(des_mat)
+View(des_mat)
+des_mat <- readRDS("C:/Users/mrkma/OneDrive/DKM/Válallkozás/TMC/TariErika.ERCP/data/des_mat.rds")
+View(des_mat)
+library(ggplot2)
+des_mat %>%
+ggplot( aes(x = n, succ_final, color = gamma,
+group = gamma, alpha = succ_interim)) +
+geom_point() +
+geom_line() +
+theme_minimal()
+source(here::here("inst","functions","load_stuff.r"))
+des_mat <- readRDS(here::here("data","des_mat.rds"))
+des_mat_filtered <- des_mat %>%
+filter(event_trt == 0.05,
+ir == .6,
+event_control == 0.3,
+dropouts == .25)
+model_final_filtered <- glm(
+cbind(succ_final, nsim - succ_final) ~ ns(n,df = 2) + ns(gamma,df=2),
+data = des_mat_filtered,
+family = binomial
+)
+summary(model_final_filtered)
+model_final_filtered %>% effects::predictorEffects() %>% plot()
+model_final <- glm(
+cbind(succ_final, nsim - succ_final) ~ ns(n,df = 2) + ns(gamma,df=1) +
+(event_trt + event_control + dropouts + ir) * ns(n,df=2),
+data = des_mat,
+family = binomial
+)
+pr <- expand.grid(
+n = seq(0, 65, length.out = 100),
+gamma = -0.5,
+event_trt = c(.05,.10),
+event_control = c(.25,.30),
+dropouts = c(.15,.25,.35),
+ir = c(.55,.65,.75)
+)
+pr$pr <- predict(model_final, newdata = pr, type = "response")
+# Produce a figure at the desired levels
+fig_1 <-
+pr %>%
+filter(
+gamma == -0.5,
+event_trt == .05,
+event_control == .3,
+dropouts == .25,
+ir == .65
+) %>%
+ggplot( aes(n, pr)) +
+geom_line() +
+theme_minimal() +
+geom_hline(yintercept = .8, linetype = 2, color = "salmon4") +
+geom_vline(xintercept = 46, linetype = 2, color = "salmon4") +
+scale_y_continuous(labels = scales::label_percent(accuracy = 1),
+breaks = c(.5,.7,.8,.9)) +
+scale_x_continuous(breaks = c(0,10,20,30,40,46,50,60)) +
+labs( x = "Sample size (per arm)",
+y = "Probability of success (Power)",
+title = "Power curve for standard assumptions",
+)
+# Produce a figure faceted for the different levels of dropouts
+fig_2 <-
+pr %>%
+filter(
+gamma == -0.5,
+event_trt == .05,
+event_control == .3,
+ir == .65
+) %>%
+ggplot( aes(n, pr,
+color = factor(dropouts),
+group = paste0(event_control,
+dropouts, ir))) +
+geom_line() +
+geom_hline(yintercept = .8, linetype = 2, color = "salmon4") +
+theme_minimal() +
+scale_y_continuous(labels = scales::label_percent(accuracy = 1),
+breaks = c(.5,.7,.8,.9))  +
+labs( x = "Sample size (per arm)",
+y = "Probability of success (Power)",
+title = "Power curve for different ratios of dropouts",
+color = "Prop.censored"
+)
+# produce a figure faceted by different ratios of event_trt & control
+fig_3 <-
+pr %>%
+filter(
+gamma == -0.5,
+dropouts == .25,
+ir == .65
+) %>%
+ggplot( aes(n, pr,
+color = factor(event_trt),
+linetype = factor(event_control),
+group = paste0(event_control,
+event_trt,
+dropouts, ir))) +
+geom_line() +
+geom_hline(yintercept = .8, linetype = 2, color = "salmon4") +
+theme_minimal() +
+scale_y_continuous(labels = scales::label_percent(accuracy = 1),
+breaks = c(.5,.7,.8,.9)) +
+labs( x = "Sample size (per arm)",
+y = "Probability of success (Power)",
+title = "Power curve for different ratios of events",
+color = "Event rate in treatment arm",
+linetype = "Event rate in control arm"
+)
+# produce a figure faceted by different information ratios
+fig_4 <-
+pr %>%
+filter(
+gamma == -0.5,
+dropouts == .25,
+event_trt == .05,
+event_control == .3
+) %>%
+ggplot( aes(n, pr,
+color = factor(ir),
+group = paste0(event_control,
+event_trt,
+dropouts, ir))) +
+geom_line() +
+geom_hline(yintercept = .8, linetype = 2, color = "salmon4") +
+theme_minimal() +
+scale_y_continuous(labels = scales::label_percent(accuracy = 1),
+breaks = c(.5,.7,.8,.9)) +
+labs( x = "Sample size (per arm)",
+y = "Probability of success (Power)",
+title = "Power curve for different place of the interim analysis",
+color = "interim sampsize /\nfinal sampsize"
+)
+fig_1
+des_mat$n %>% sum
+fig_2
+fig_3
+fig_4
+load("C:/Users/mrkma/OneDrive/DKM/Válallkozás/TMC/TariErika.ERCP/inst/report/end_state.rdata")
